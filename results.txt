@@ -1,0 +1,2 @@
+Mean reward before training: -87753.6
+Mean reward after training: -72266.4

@@ -165,7 +165,7 @@ class EnergyBrokerEnv(gym.Env):
         
         obs = self._next_observation()
 
-        return obs, reward_as_float, done, 1.05236
+        return obs, reward_as_float, done, {}
 
     def reset(self):
         self.tariff_data1 = []
