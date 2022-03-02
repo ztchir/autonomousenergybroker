@@ -18,7 +18,7 @@ def evaluate(env, model, num_steps=1000, test = ''):
     for i in range(num_steps):
         # _states are only useful when using LSTM policies
         action, _states = model.predict(obs)
-              # create file name and append it to a list
+        # create file name and append it to a list
         tariff, profit, cust = env.render()
         tariff_filename = f'tariff{i}.png'
         profit_filename = f'profit{i}.png'
