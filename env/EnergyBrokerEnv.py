@@ -1,7 +1,8 @@
 import gym
 from gym import spaces
 import pandas as pd
-import numpy as np
+# import numpy as np
+import cupy as np
 from copy import copy
 import matplotlib.pyplot as plt
 import collections
@@ -158,14 +159,14 @@ class EnergyBrokerEnv(gym.Env):
         self.tariff_data5.append(self.tariff[4])
 
         reward = self.profit * delay_modifier
-        reward_as_float = reward.astype(float)
+        reward_as_float = reward[0].astype(float)
         #reward = self.balance * delay_modifier
         #done = np.any(self.balance <= INITIAL_BROKER_VOLUME) # Note  INITIAL_BROKER_VOLUME = 0 this is just zero
         done = np.any(self.balance <= 10000) # Note  INITIAL_BROKER_VOLUME = 0 this is just zero
         
         obs = self._next_observation()
 
-        return obs, reward_as_float, done, 1.05236
+        return obs, reward_as_float, done, {}
 
     def reset(self):
         self.tariff_data1 = []
