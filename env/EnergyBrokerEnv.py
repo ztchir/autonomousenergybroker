@@ -1,8 +1,9 @@
+#from multiprocessing.pool import INIT
 import gym
 from gym import spaces
 import pandas as pd
-# import numpy as np
-import cupy as np
+# import cupy as np
+import numpy as np
 from copy import copy
 import matplotlib.pyplot as plt
 import collections
@@ -10,51 +11,57 @@ import collections
 
 # Add ability to have more than one broker later
 MAX_ACCOUNT_BALANCE = 2147483647
-MAX_ENERGY_PRICE = 1
 MAX_TARIFF = 10
-MAX_STEPS = 20000
+MAX_STEPS = 2000000
 
 # Start with 6 customers
-#np.random.seed(1001)
+np.random.seed(1001)
 NUM_BROKERS = 5
-NUM_CUSTOMERS = 1000
-#WHOLESALE = np.array([0.07 for i in range(NUM_BROKERS)])
-WHOLESALE = np.array([0.07 for i in range(1)])
+NUM_CUSTOMERS = 10000
+WHOLESALE = np.array([0.001 for i in range(1)]) # Albert Wholesale Price ~$103$/MWh or 0.103$/kWh
 
 CUSTOMER = np.arange(0, NUM_CUSTOMERS)
-CUSTOMER_TEMP = 2 # With a Customer Temp of 2 there is a 67% chance Customers will choose top 3 tariffs
-#CUSTOMER_TEMP = np.random.randint(0,100000000000, NUM_CUSTOMERS)
-#CUSTOMER_TEMP = 100000000 * np.ones(NUM_CUSTOMERS)
-#CUSTOMER_TEMP = [1, 1, 1, np.inf, np.inf, np.inf]
-#CUSTOMER_TEMP = [1, 1, 1, 1, 1, 1] # Customers should choose the cheapest tariff
+CUSTOMER_TEMP = 0.1 # With a Customer Temp of 2 there is a 67% chance Customers will choose top 3 tariffs
 CUSTOMER_BASE = np.random.randint(0, NUM_BROKERS, NUM_CUSTOMERS)
-#CUSTOMER_BASE = [1, 1, 1, 1, 1, 1] # All customers assigned to broker 2 initially
-INITIAL_ACCOUNT_BALANCE = np.full(1, 1000000)
+INITIAL_ACCOUNT_BALANCE = np.full(1, 0)
 INITIAL_BROKER_VOLUME = np.zeros(NUM_BROKERS)
-INITIAL_TARIFFS = 0.166 * np.random.rand(NUM_BROKERS) # using normal distribution around average tariff price $0.166kW/h
-#INITIAL_TARIFFS = [.166, 1.00] # Broker 1 starts with a cheaper price
 
 # MINIMUM TARIFF and MAXIMUM TARIFF
-MINIMUM_TARIFF = 0.1
-MAXIMUM_TARIFF = 10
+BROKER_CHANGE_LIMIT = 0.5 # LIMITED TO MAXIMUM CHANGE 50%
+MINIMUM_TARIFF = 0.0 # Minimum 0.0 cents/kWh
+MAXIMUM_TARIFF = 0.20 # Maximum 0.15 cents/kWh
+
+#INITIAL_TARIFFS = np.full(NUM_BROKERS, 0.05)
+INITIAL_TARIFFS = np.array([0.15, 0.05, 0.1, 0.07, 0.19])
+#INITIAL_TARIFFS = MAXIMUM_TARIFF * np.random.rand(NUM_BROKERS) # using normal distribution around average tariff price $0.166kW/h
+
+
 
 class EnergyBrokerEnv(gym.Env):
     """An Energy Broker Environment for OpenAI gym"""
     metadata = {'render.modes': ['human']}
 
-    def __init__(self, df):
+    def __init__(
+        self,
+        df, 
+        continuous: bool = False,
+        ):
+
         super(EnergyBrokerEnv, self).__init__()
 
         self.df = df
+        self.continuous = continuous
         self.reward_range = (-MAX_ACCOUNT_BALANCE, MAX_ACCOUNT_BALANCE)
 
         # Actions of the broker Increase %x, Decrease %x, or Hold
-        self.act_space = spaces.Box(low=-0.1, high=0.1, shape=(1,)) # Brokers limited to 1/10 or doubling in a single timestep
+        if self.continuous:
+            self.action_space = spaces.Box(low=-1, high=1, shape=(1,))
+        else:
+            self.action_space = spaces.Discrete(3)
         #{
             #'action_types' : spaces.MultiDiscrete(np.full(NUM_BROKERS, 3)),
             #'amount' : spaces.Box(low=0, high=1, shape=(NUM_BROKERS,))
         #}
-        self.action_space = self.act_space
         
         # Observations contain Historical Wholesale price, number of customers,
         # and current account balance
@@ -62,11 +69,11 @@ class EnergyBrokerEnv(gym.Env):
         #### Tariffs of other brokers to be added later ####
         #### This will change when adding broker preditcion ####
         self.obs_spaces = {
-            'customer_base' : gym.spaces.Box(low=0, high=NUM_BROKERS, shape=(NUM_CUSTOMERS,)),
+            'market_share' : gym.spaces.Box(low=0, high=1, shape=(NUM_BROKERS,)),
             #'wholesale_space' : gym.spaces.Box(low=0, high=1, shape=(11,)),   # Remove this for now to simplify the case
-            'tariff_space' : gym.spaces.Box(low=0, high=MAX_TARIFF, shape=(NUM_BROKERS,)),
+            'tariff_space' : gym.spaces.Box(low=0, high=1, shape=(NUM_BROKERS,)),
             #'balance_space' : gym.spaces.Box(low=0, high=MAX_ACCOUNT_BALANCE, shape=(NUM_BROKERS,)),
-            'balance_space' : gym.spaces.Box(low=0, high=MAX_ACCOUNT_BALANCE, shape=(1,)),
+            'balance_space' : gym.spaces.Box(low=0, high=1, shape=(1,)),
         }
         self.observation_space = spaces.Dict(self.obs_spaces)
         
@@ -77,66 +84,77 @@ class EnergyBrokerEnv(gym.Env):
     def _next_observation(self):
         #frame = np.array([
         #    self.df.loc[self.current_step: self.current_step + 10, 'OR 30 Min'].values / MAX_ENERGY_PRICE,
-        #])
-        #### Determine How to add consumption
-        self.broker_volume = copy(INITIAL_BROKER_VOLUME)
-        self.cust_volume = copy(INITIAL_BROKER_VOLUME)
-
-        self.cust_volume = (600 / 3600*30) * (1 + np.random.normal(0, 0.25, NUM_CUSTOMERS)) # average hourly consumption
-        for base in range(0, NUM_CUSTOMERS):
-            self.broker_volume[self.cust_base[base]] += self.cust_volume[base]        
-            self.pred_volume[self.cust_base[base]] += self.cust_volume[base] * (1 + np.random.normal(0, 0.25))
-        self.profit = self.tariff[0] * self.broker_volume[0] - self.pred_volume[0] * WHOLESALE
-        np.add(self.balance, self.profit, out=self.balance, casting='unsafe')       
-    
+        #])       
+        
+        # Normalize the observation space
         obs = {
-            'customer_base' : self.cust_base,
+            'market_share' : self.customer_share / NUM_CUSTOMERS,
             #'wholesale_space': frame,
-            'tariff_space' : self.tariff,
-            'balance_space' : self.balance,
+            'tariff_space' : (self.tariff - MINIMUM_TARIFF) / (MAXIMUM_TARIFF - MINIMUM_TARIFF),
+            'balance_space' : self.balance / MAX_ACCOUNT_BALANCE,
         }
 
         return obs
 
     def _take_action(self, action):
-        self.action_taken = action
         # Broker 0 is the broker we are concerened with here. The other brokers
         # are randomly controlled
         # for i in range(len(action)):
         # Temporary addition of random action of broker 1 and 2
-        self.tariff[0] *= (1 + action[0]) #######
-        for i in range(1, NUM_BROKERS):
-            self.tariff[i] *= (1 + np.random.uniform(-0.1,0.1))
-  
-        for i in range(NUM_BROKERS):
-            if self.tariff[i] < MINIMUM_TARIFF:
-              self.tariff[i] = MINIMUM_TARIFF
-            elif self.tariff[i] > MAXIMUM_TARIFF:
-              self.tariff[i] = MAXIMUM_TARIFF
+        if self.continuous:
+           self.tariff[0] *= (1 + action[0] * MAXIMUM_TARIFF)
+           #self.tariff[0] = action[0] * MAXIMUM_TARIFF
+        else:
+            assert self.action_space.contains(
+                action
+            ), f"{action!r} ({type(action)}) invalid "
+
+        if not self.continuous and action == 1:    
+            self.tariff[0] *= 1.05
+        elif not self.continuous and action == 2:
+            self.tariff[0] *= 0.95
+
+        #if self.current_step == 500:
+        #    self.tariff[1] = 0.025
+        ########
+        # ADD Continuous and Discrete actitons similar to LunarLander-V2
+        ########
+        '''
+        if self.action_taken == 1:
+            self.tariff[0] = (self.tariff[0] + 0.01)
+        elif self.action_taken == 2:
+            self.tariff[0] = (self.tariff[0] - 0.01)
+        '''
+        # Random changes in other broker tariffs
+        # for i in range(1, NUM_BROKERS):
+        #     self.tariff[i] *= (1 + np.random.uniform(-0.05,0.05))
+
+        self.tariff = np.clip(self.tariff, MINIMUM_TARIFF, MAXIMUM_TARIFF).astype(np.float32)
 
         rank = np.argsort(self.tariff) + 1
 
         self.cust_base = []
-        '''
-        for customer in self.customers:
-            prob = []
-            ranksum = np.sum(np.exp(-rank/self.temp[customer]))
-            for i in rank:
-                prob.append(-np.exp(-i/self.temp[customer]) / ranksum)
-        '''
-        for customer in self.customers:
-            prob = []
-            ranksum = np.sum(np.exp(-rank/self.temp))
-            for i in rank:
-                prob.append(np.exp(-i/self.temp) / ranksum)
-            self.cust_base = np.random.choice([0, 1, 2, 3, 4], p=prob, size=NUM_CUSTOMERS)
-            '''
-            options = np.where(prob == np.min(prob))
-            if len(options[0]) > 1:
-              self.cust_base.append(np.random.choices(options[0]))
-            else:
-              self.cust_base.append(options[0][0])
-            '''
+        
+        # Customers choose new broker
+        prob = []
+        ranksum = np.sum(np.exp(-rank/self.temp))
+        for i in rank:
+            prob.append(np.exp(-i/self.temp) / ranksum)
+        self.cust_base = np.random.choice(list(range(NUM_BROKERS)), p=prob, size=NUM_CUSTOMERS)
+
+        #### Determine How to add consumption
+        self.customer_share = copy(INITIAL_BROKER_VOLUME) # Zeros market share for each broker
+        self.broker_volume = copy(INITIAL_BROKER_VOLUME) # Initial Volume is vector of zeros for NUM_BROKERS
+        self.cust_volume = copy(INITIAL_BROKER_VOLUME) 
+
+        self.cust_volume = (600) * (1 + np.random.normal(0, 0, NUM_CUSTOMERS)) # average hourly consumption 600kWh
+        for base in range(0, NUM_CUSTOMERS):
+            self.customer_share[self.cust_base[base]] += 1
+            self.broker_volume[self.cust_base[base]] += self.cust_volume[base]        
+            #self.pred_volume[self.cust_base[base]] += self.cust_volume[base] * (1 + np.random.normal(0, 0.01))
+        self.profit = self.tariff[0] * self.broker_volume[0] - self.broker_volume[0] * WHOLESALE # They always buy the right amount of energy
+        np.add(self.balance, self.profit, out=self.balance, casting='unsafe')
+
 
     def step(self, action):
         # Execute one time step within the enviroment
@@ -150,7 +168,7 @@ class EnergyBrokerEnv(gym.Env):
         
         delay_modifier = (self.current_step / MAX_STEPS)
     
-        self.step_profit.append(self.balance)
+        self.step_profit.append(self.balance[0])
 
         self.tariff_data1.append(self.tariff[0])
         self.tariff_data2.append(self.tariff[1])
@@ -158,12 +176,11 @@ class EnergyBrokerEnv(gym.Env):
         self.tariff_data4.append(self.tariff[3])
         self.tariff_data5.append(self.tariff[4])
 
-        reward = self.profit * delay_modifier
-        reward_as_float = reward[0].astype(float)
+        reward = self.profit[0]
+        reward_as_float = reward.astype(float)
         #reward = self.balance * delay_modifier
         #done = np.any(self.balance <= INITIAL_BROKER_VOLUME) # Note  INITIAL_BROKER_VOLUME = 0 this is just zero
-        done = np.any(self.balance <= 10000) # Note  INITIAL_BROKER_VOLUME = 0 this is just zero
-        
+        done = np.any(self.balance[0] <= -MAX_ACCOUNT_BALANCE/1000 or self.balance[0] > MAX_ACCOUNT_BALANCE) 
         obs = self._next_observation()
 
         return obs, reward_as_float, done, {}
@@ -179,6 +196,7 @@ class EnergyBrokerEnv(gym.Env):
         self.balance = copy(INITIAL_ACCOUNT_BALANCE)
         self.customers = copy(CUSTOMER)
         self.cust_base = copy(CUSTOMER_BASE)
+        self.customer_share = copy(INITIAL_BROKER_VOLUME)
         self.tariff = copy(INITIAL_TARIFFS)
         self.broker_volume = copy(INITIAL_BROKER_VOLUME)
         self.pred_volume = copy(INITIAL_BROKER_VOLUME)
@@ -213,7 +231,7 @@ class EnergyBrokerEnv(gym.Env):
 
         profit_fig = plt.figure()
         plt.plot(self.step_profit)
-        plt.title('Broker Profit')
+        plt.title('Broker Account Balance')
         plt.xlabel('Time Step')
         plt.ylabel('$')
         plt.legend(brokers)

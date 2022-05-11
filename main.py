@@ -1,4 +1,5 @@
 import os
+from subprocess import call
 
 import gym
 import json
@@ -13,6 +14,8 @@ from stable_baselines3 import A2C
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.results_plotter import load_results, ts2xy
+from stable_baselines3 import PPO
+from stable_baselines3 import DDPG
 
 
 from env.monitor_training import SaveOnBestTrainingRewardCallback
@@ -38,7 +41,7 @@ def plot_results(log_folder, title='Learning Curve'):
     :param title: (str) the title of the task to plot
     """
     x, y = ts2xy(load_results(log_folder), 'timesteps')
-    #y = moving_average(y, window=1)
+    y = moving_average(y, window=1)
     # Truncate x
     x = x[len(x) - len(y):]
 
@@ -58,16 +61,21 @@ os.makedirs(log_dir, exist_ok=True)
 # Evaluate Untrained model
 
 #broker_env = DummyVecEnv([lambda: EnergyBrokerEnv(df)])
-broker_env = Monitor(EnergyBrokerEnv(df), log_dir)
+broker_env = Monitor(EnergyBrokerEnv(df, continuous=True), log_dir)
 
-callback = SaveOnBestTrainingRewardCallback(check_freq=10, log_dir=log_dir)
+# callback = SaveOnBestTrainingRewardCallback(check_freq=10, log_dir=log_dir)
+
+callback = EvalCallback(broker_env, best_model_save_path=log_dir,
+                             log_path=log_dir, eval_freq=100,
+                             deterministic=True, render=False)
 
 model = A2C('MultiInputPolicy', broker_env, verbose=1, device='cuda')
+#model = DDPG('MultiInputPolicy', broker_env, verbose=1, device='cuda')
 
-#mean_reward_before_train = evaluate(broker_env, model, num_steps=10, test='untrained')
+mean_reward_before_train = evaluate(broker_env, model, num_steps=100, test='untrained', gif=True)
 # Train model
-model.learn(total_timesteps=10000, callback=callback)
-
+model.learn(total_timesteps=100, callback=callback)
+#
 #results_plotter.plot_results([log_dir], 1000, results_plotter.X_TIMESTEPS, "A2C Energy Broker")
 plot_results(log_dir)
 
@@ -75,7 +83,7 @@ plot_results(log_dir)
 #del model  # delete trained model to demonstrate loading
 
 #model = A2C.load('A2CEnergy')
-#mean_reward_after_training = evaluate(broker_env, model, num_steps=10, test='trained')
-
+mean_reward_after_training = evaluate(broker_env, model, num_steps=100, test='trained', gif=True)
+del model
 #print(mean_reward_before_train)
 #print(mean_reward_after_training)
