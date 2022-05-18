@@ -3,16 +3,19 @@ import numpy as np
 import imageio
 
 
-plots_dir = "/home/ztchir/dev/autonomousenergybroker/plot/"
-os.makedirs(plots_dir, exist_ok=True)
 
-def evaluate(env, model, num_steps=1000, test = '', gif=True):
+
+def evaluate(env, model, num_steps=1000, test = '', run_dir = '', gif=True):
     """
     Evaluate a RL agent
     :param model: (BaseRLModel object) the RL Agent
     :param num_steps: (int) number of timesteps to evaluate it
     :return: (float) Mean reward for the last 100 episodes
     """
+
+    plots_dir = "/home/ztchir/dev/autonomousenergybroker/" + run_dir + "/plot/"
+    os.makedirs(plots_dir, exist_ok=True)
+
     tariff_filenames = []
     profit_filenames = []
     cust_filenames = []   
@@ -27,7 +30,7 @@ def evaluate(env, model, num_steps=1000, test = '', gif=True):
     profitplot = f'balance{test}.png'
 
     if gif == True:
-        video_dir = "/home/ztchir/dev/autonomousenergybroker/video/"
+        video_dir = "/home/ztchir/dev/autonomousenergybroker/" + run_dir + "/video/"
         os.makedirs(video_dir, exist_ok=True)
         for i in range(num_steps):
             # _states are only useful when using LSTM policies

@@ -1,4 +1,5 @@
 import os
+import sys
 from subprocess import call
 
 import gym
@@ -52,38 +53,35 @@ def plot_results(log_folder, title='Learning Curve'):
     plt.title(title + " Smoothed")
     plt.savefig(log_dir + "training.pdf")
 
+def main():
 
-df = pd.read_csv('./data/PUB_PriceHOEPPredispOR_2020.csv')
+    # Set descriptive folder name for multiple runs
+    
+    run_dir = sys.argvp[1:]
 
-log_dir = "/home/ztchir/dev/autonomousenergybroker/logs/"
-os.makedirs(log_dir, exist_ok=True)
+    df = pd.read_csv('./data/PUB_PriceHOEPPredispOR_2020.csv')
 
-# Evaluate Untrained model
+    log_dir = "/home/ztchir/dev/autonomousenergybroker/" + run_dir + "/logs/"
+    os.makedirs(log_dir, exist_ok=True)
 
-#broker_env = DummyVecEnv([lambda: EnergyBrokerEnv(df)])
-broker_env = Monitor(EnergyBrokerEnv(df, continuous=False), log_dir)
+    
+    broker_env = Monitor(EnergyBrokerEnv(df, continuous=False), log_dir)
 
-# callback = SaveOnBestTrainingRewardCallback(check_freq=10, log_dir=log_dir)
 
-callback = EvalCallback(broker_env, best_model_save_path=log_dir,
-                             log_path=log_dir, eval_freq=100,
-                             deterministic=True, render=False)
+    callback = EvalCallback(broker_env, best_model_save_path=log_dir,
+                                log_path=log_dir, eval_freq=100,
+                                deterministic=True, render=False)
 
-model = A2C('MultiInputPolicy', broker_env, verbose=1, device='cuda')
-#model = DDPG('MultiInputPolicy', broker_env, verbose=1, device='cuda')
+    model = A2C('MultiInputPolicy', broker_env, verbose=1, device='cuda')
+    # Evaluate Untrained model
+    mean_reward_before_train = evaluate(broker_env, model, num_steps=5000, test='untrained', gif=True)
+    # Train model
+    model.learn(total_timesteps=1000, callback=callback)
 
-mean_reward_before_train = evaluate(broker_env, model, num_steps=5000, test='untrained', gif=True)
-# Train model
-model.learn(total_timesteps=1000, callback=callback)
-#
-#results_plotter.plot_results([log_dir], 1000, results_plotter.X_TIMESTEPS, "A2C Energy Broker")
-plot_results(log_dir)
+    # Plot learning curve
+    plot_results(log_dir)
 
-#model.save('A2CEnergy')
-#del model  # delete trained model to demonstrate loading
+    # Evaluate trained model
+    mean_reward_after_training = evaluate(broker_env, model, num_steps=5000, test='trained', gif=True)
+    del model
 
-#model = A2C.load('A2CEnergy')
-mean_reward_after_training = evaluate(broker_env, model, num_steps=5000, test='trained', gif=True)
-del model
-#print(mean_reward_before_train)
-#print(mean_reward_after_training)
