@@ -18,7 +18,7 @@ MAX_STEPS = 2000000
 np.random.seed(1001)
 NUM_BROKERS = 5
 NUM_CUSTOMERS = 10000
-WHOLESALE = np.array([0.001 for i in range(1)]) # Albert Wholesale Price ~$103$/MWh or 0.103$/kWh
+WHOLESALE = np.array([0.1 for i in range(1)]) # Albert Wholesale Price ~$103$/MWh or 0.103$/kWh
 
 CUSTOMER = np.arange(0, NUM_CUSTOMERS)
 CUSTOMER_TEMP = 0.1 # With a Customer Temp of 2 there is a 67% chance Customers will choose top 3 tariffs
@@ -110,9 +110,9 @@ class EnergyBrokerEnv(gym.Env):
             ), f"{action!r} ({type(action)}) invalid "
 
         if not self.continuous and action == 1:    
-            self.tariff[0] *= 1.05
+            self.tariff[0] += 0.005
         elif not self.continuous and action == 2:
-            self.tariff[0] *= 0.95
+            self.tariff[0] -= 0.005
 
         #if self.current_step == 500:
         #    self.tariff[1] = 0.025
@@ -178,9 +178,7 @@ class EnergyBrokerEnv(gym.Env):
 
         reward = self.profit[0]
         reward_as_float = reward.astype(float)
-        #reward = self.balance * delay_modifier
-        #done = np.any(self.balance <= INITIAL_BROKER_VOLUME) # Note  INITIAL_BROKER_VOLUME = 0 this is just zero
-        done = np.any(self.balance[0] <= -MAX_ACCOUNT_BALANCE/1000 or self.balance[0] > MAX_ACCOUNT_BALANCE) 
+        done = self.current_step > 20000 
         obs = self._next_observation()
 
         return obs, reward_as_float, done, {}
