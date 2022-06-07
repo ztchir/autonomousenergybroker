@@ -51,37 +51,35 @@ def plot_results(log_folder, title='Learning Curve'):
     plt.xlabel('Number of Timesteps')
     plt.ylabel('Rewards')
     plt.title(title + " Smoothed")
-    plt.savefig(log_dir + "training.pdf")
-
-def main():
-
-    # Set descriptive folder name for multiple runs
-    
-    run_dir = sys.argvp[1:]
-
-    df = pd.read_csv('./data/PUB_PriceHOEPPredispOR_2020.csv')
-
-    log_dir = "/home/ztchir/dev/autonomousenergybroker/" + run_dir + "/logs/"
-    os.makedirs(log_dir, exist_ok=True)
-
-    
-    broker_env = Monitor(EnergyBrokerEnv(df, continuous=False), log_dir)
+    plt.savefig(log_folder + "training.pdf")
 
 
-    callback = EvalCallback(broker_env, best_model_save_path=log_dir,
-                                log_path=log_dir, eval_freq=100,
-                                deterministic=True, render=False)
+# Set descriptive folder name for multiple runs
+run_dir = "random_broker_step_run"
 
-    model = A2C('MultiInputPolicy', broker_env, verbose=1, device='cuda')
-    # Evaluate Untrained model
-    mean_reward_before_train = evaluate(broker_env, model, num_steps=5000, test='untrained', gif=True)
-    # Train model
-    model.learn(total_timesteps=1000, callback=callback)
+df = pd.read_csv('./data/PUB_PriceHOEPPredispOR_2020.csv')
 
-    # Plot learning curve
-    plot_results(log_dir)
+log_dir = "/home/ztchir/dev/autonomousenergybroker/" + run_dir + "/logs/"
+os.makedirs(log_dir, exist_ok=True)
 
-    # Evaluate trained model
-    mean_reward_after_training = evaluate(broker_env, model, num_steps=5000, test='trained', gif=True)
-    del model
+
+broker_env = Monitor(EnergyBrokerEnv(df, continuous=False), log_dir)
+
+
+callback = EvalCallback(broker_env, best_model_save_path=log_dir,
+                            log_path=log_dir, eval_freq=100,
+                            deterministic=True, render=False)
+
+model = A2C('MultiInputPolicy', broker_env, verbose=1, device='cuda')
+# Evaluate Untrained model
+mean_reward_before_train = evaluate(broker_env, model, num_steps=1000, test='untrained', run_dir=run_dir, gif=True)
+# Train model
+model.learn(total_timesteps=10000, callback=callback)
+
+# Plot learning curve
+plot_results(log_dir)
+
+# Evaluate trained model
+mean_reward_after_training = evaluate(broker_env, model, num_steps=1000, test='trained', run_dir=run_dir, gif=True)
+del model
 

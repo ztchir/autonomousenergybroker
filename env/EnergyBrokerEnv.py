@@ -12,7 +12,7 @@ import collections
 # Add ability to have more than one broker later
 MAX_ACCOUNT_BALANCE = 2147483647
 MAX_TARIFF = 10
-MAX_STEPS = 2000000
+MAX_STEPS = 10000
 
 # Start with 6 customers
 np.random.seed(1001)
@@ -32,9 +32,9 @@ MINIMUM_TARIFF = 0.0 # Minimum 0.0 cents/kWh
 MAXIMUM_TARIFF = 0.20 # Maximum 0.15 cents/kWh
 
 #INITIAL_TARIFFS = np.full(NUM_BROKERS, 0.05)
-INITIAL_TARIFFS = np.array([0.15, 0.05, 0.1, 0.07, 0.19])
+INITIAL_TARIFFS = np.array([0.15, 0.13, 0.19, 0.13, 0.19])
 #INITIAL_TARIFFS = MAXIMUM_TARIFF * np.random.rand(NUM_BROKERS) # using normal distribution around average tariff price $0.166kW/h
-
+RANDOM_SWITCH = np.random.randint(1, 1000)
 
 
 class EnergyBrokerEnv(gym.Env):
@@ -88,10 +88,10 @@ class EnergyBrokerEnv(gym.Env):
         
         # Normalize the observation space
         obs = {
-            'market_share' : self.customer_share / NUM_CUSTOMERS,
+            'market_share' : np.around(self.customer_share / NUM_CUSTOMERS, 1),
             #'wholesale_space': frame,
-            'tariff_space' : (self.tariff - MINIMUM_TARIFF) / (MAXIMUM_TARIFF - MINIMUM_TARIFF),
-            'balance_space' : self.balance / MAX_ACCOUNT_BALANCE,
+            'tariff_space' : np.around((self.tariff - MINIMUM_TARIFF) / (MAXIMUM_TARIFF - MINIMUM_TARIFF), 2),
+            'balance_space' : np.around(self.balance / MAX_ACCOUNT_BALANCE, 1),
         }
 
         return obs
@@ -113,6 +113,9 @@ class EnergyBrokerEnv(gym.Env):
             self.tariff[0] += 0.005
         elif not self.continuous and action == 2:
             self.tariff[0] -= 0.005
+
+        if self.current_step == RANDOM_SWITCH:
+            self.tariff[1] = 0.11
 
         #if self.current_step == 500:
         #    self.tariff[1] = 0.025
@@ -163,8 +166,8 @@ class EnergyBrokerEnv(gym.Env):
 
         self.current_step += 1
         
-        if self.current_step > len(self.df.loc[:].values) - 11:
-            self.current_step = 0
+        #if self.current_step > len(self.df.loc[:].values) - 11:
+        #    self.current_step = 0
         
         delay_modifier = (self.current_step / MAX_STEPS)
     
@@ -178,7 +181,7 @@ class EnergyBrokerEnv(gym.Env):
 
         reward = self.profit[0]
         reward_as_float = reward.astype(float)
-        done = self.current_step > 20000 
+        done = self.current_step > MAX_STEPS or self.balance > MAX_ACCOUNT_BALANCE**2
         obs = self._next_observation()
 
         return obs, reward_as_float, done, {}
