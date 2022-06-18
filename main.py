@@ -9,6 +9,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from knockknock import email_sender
+
 #from stable_baselines3.dqn.policies import MlpPolicy
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3 import A2C
@@ -46,6 +48,7 @@ def plot_results(log_folder, sub_folder, title='Learning Curve'):
     # Truncate x
     x = x[len(x) - len(y):]
 
+<<<<<<< HEAD
     fig = plt.figure(title)
     plt.plot(x, y)
     plt.xlabel('Number of Timesteps')
@@ -106,3 +109,27 @@ plot_results(log_dir, 'training2/')
 # Evaluate trained model
 mean_reward_after_training = evaluate(broker_env, agent, num_steps=1000, test='trained', run_dir=run_dir, gif=True)
 
+=======
+# Evaluate Untrained model
+@email_sender(recipient_emails=["ztchir@gmail.com"], sender_email="zachnotification@gmail.com")
+def model_evaluation():
+    broker_env = DummyVecEnv([lambda: EnergyBrokerEnv(df)])
+    model = A2C('MultiInputPolicy', broker_env, verbose=1)
+    mean_reward_before_train = evaluate(broker_env, model, num_steps=100, test='untrained')
+
+    # Train model
+    model.learn(total_timesteps=1000)
+    model.save('A2CEnergy')
+    del model  # delete trained model to demonstrate loading
+
+    model = A2C.load('A2CEnergy')
+    mean_reward_after_training = evaluate(broker_env, model, num_steps=100, test='trained')
+    with open('results.txt', 'w') as f:
+        f.write('Mean reward before training: ' + mean_reward_before_train.astype('str') + '\n')
+        f.write('Mean reward after training: ' + mean_reward_after_training.astype('str') + '\n')
+
+    print(mean_reward_before_train)
+    print(mean_reward_after_training)
+
+model_evaluation()
+>>>>>>> a237baf8c8ab7e598279c2145d954877d25622af

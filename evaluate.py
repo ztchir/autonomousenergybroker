@@ -18,6 +18,7 @@ def evaluate(env, model, num_steps=1000, test = '', gif=True):
     cust_filenames = []   
     episode_rewards = [0.0]
     obs = env.reset()
+<<<<<<< HEAD
 
     tariffgif = f'tariff{test}.gif'
     custgif = f'custgif{test}.gif'
@@ -58,6 +59,29 @@ def evaluate(env, model, num_steps=1000, test = '', gif=True):
 
         mean_100ep_reward = round(np.mean(episode_rewards[-100:]), 1)
         print("Mean reward:", mean_100ep_reward, "Num episodes:", len(episode_rewards))
+=======
+    for i in range(num_steps):
+        # _states are only useful when using LSTM policies
+        action, _states = model.predict(obs)
+        # create file name and append it to a list
+        tariff, profit, cust = env.render()
+        tariff_filename = f'tariff{i}.png'
+        profit_filename = f'profit{i}.png'
+        cust_filename = f'cust{i}.png'
+        tariffgif = f'tariff{test}.gif'
+        custgif = f'custgif{test}.gif'
+        profitgif = f'profit{test}.gif'
+
+
+        tariff_filenames.append(tariff_filename)
+        profit_filenames.append(profit_filename)
+        cust_filenames.append(cust_filename)
+        # save frame
+        tariff.savefig(os.path.join('./video/', tariff_filename))
+        profit.savefig(os.path.join('./video/', profit_filename))
+        cust.savefig(os.path.join('./video/', cust_filename))
+        obs, reward, done, info = env.step(action)
+>>>>>>> a237baf8c8ab7e598279c2145d954877d25622af
         
     # build gif
         with imageio.get_writer(os.path.join(video_dir, tariffgif), mode='I') as writer:
