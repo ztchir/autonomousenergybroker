@@ -12,7 +12,7 @@ import collections
 # Add ability to have more than one broker later
 MAX_ACCOUNT_BALANCE = 2147483647
 MAX_TARIFF = 10
-MAX_STEPS = 10000
+MAX_STEPS = 1000000
 
 # Start with 6 customers
 np.random.seed(1001)
@@ -32,10 +32,14 @@ MINIMUM_TARIFF = 0.0 # Minimum 0.0 cents/kWh
 MAXIMUM_TARIFF = 0.20 # Maximum 0.15 cents/kWh
 
 #INITIAL_TARIFFS = np.full(NUM_BROKERS, 0.05)
-INITIAL_TARIFFS = np.array([0.15, 0.13, 0.19, 0.13, 0.19])
-#INITIAL_TARIFFS = MAXIMUM_TARIFF * np.random.rand(NUM_BROKERS) # using normal distribution around average tariff price $0.166kW/h
-RANDOM_SWITCH = np.random.randint(1, 1000)
 
+INITIAL_TARIFFS = np.array([0.15, 0.13, 0.19, 0.13, 0.19])
+INITIAL_TARIFFS[0] = np.random.random() * MAXIMUM_TARIFF
+#INITIAL_TARIFFS = MAXIMUM_TARIFF * np.random.rand(NUM_BROKERS) # using normal distribution around average tariff price $0.166kW/h
+RANDOM_SWITCH_UP = np.random.randint(1, 1000)
+RANDOM_SWITCH_DOWN = np.random.randint(1, 1000)
+SWITCH_UP_MAG = np.random.random() * 0.1
+SWITCH_DOWN_MAG = np.random.random() * 0.1
 
 class EnergyBrokerEnv(gym.Env):
     """An Energy Broker Environment for OpenAI gym"""
@@ -114,20 +118,11 @@ class EnergyBrokerEnv(gym.Env):
         elif not self.continuous and action == 2:
             self.tariff[0] -= 0.005
 
-        if self.current_step == RANDOM_SWITCH:
-            self.tariff[1] = 0.11
+        if self.current_step == RANDOM_SWITCH_DOWN:
+            self.tariff[1] += SWITCH_DOWN_MAG
+        elif self.current_step == RANDOM_SWITCH_UP:
+            self.tariff[1] -= SWITCH_UP_MAG
 
-        #if self.current_step == 500:
-        #    self.tariff[1] = 0.025
-        ########
-        # ADD Continuous and Discrete actitons similar to LunarLander-V2
-        ########
-        '''
-        if self.action_taken == 1:
-            self.tariff[0] = (self.tariff[0] + 0.01)
-        elif self.action_taken == 2:
-            self.tariff[0] = (self.tariff[0] - 0.01)
-        '''
         # Random changes in other broker tariffs
         # for i in range(1, NUM_BROKERS):
         #     self.tariff[i] *= (1 + np.random.uniform(-0.05,0.05))
@@ -203,8 +198,7 @@ class EnergyBrokerEnv(gym.Env):
         self.pred_volume = copy(INITIAL_BROKER_VOLUME)
         self.temp = copy(CUSTOMER_TEMP)
 
-        self.current_step = np.random.randint(
-            0, len(self.df.loc[:, 'OR 30 Min'].values) - 20)
+        self.current_step = 0
 
         return self._next_observation()
 
